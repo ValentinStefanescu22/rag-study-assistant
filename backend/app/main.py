@@ -3,15 +3,24 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import anthropic
 import httpx
 from fastapi import FastAPI, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
 from pypdf.errors import PdfReadError
 
-from app import db, retrieve
+from app import db, generate, retrieve
 from app.ingest import ingest_pdf
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-OLLAMA_DOWN = "Embedding model unavailable. Is Ollama running?"
+MODEL_DOWN = "Model unavailable. Is Ollama running?"
+# Errors that mean "the model is unreachable or overloaded, try again later" -> 503.
+MODEL_UNAVAILABLE_ERRORS = (
+    httpx.HTTPError,
+    anthropic.APIConnectionError,
+    anthropic.RateLimitError,
+    anthropic.InternalServerError,
+)
 
 
 @asynccontextmanager
@@ -42,7 +51,7 @@ def upload_document(file: UploadFile):
     except (PdfReadError, ValueError) as e:
         raise HTTPException(400, f"Could not read PDF: {e}")
     except httpx.HTTPError as e:
-        raise HTTPException(503, f"{OLLAMA_DOWN} ({e})")
+        raise HTTPException(503, f"{MODEL_DOWN} ({e})")
 
 
 @app.get("/documents")
@@ -60,4 +69,18 @@ def search(
     try:
         return retrieve.search(q, k)
     except httpx.HTTPError as e:
-        raise HTTPException(503, f"{OLLAMA_DOWN} ({e})")
+        raise HTTPException(503, f"{MODEL_DOWN} ({e})")
+
+
+# The request body. FastAPI validates the JSON against it and returns 422 if it doesn't fit.
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+
+
+# The full RAG answer: retrieve sources, ask the chat model, return the answer with citations.
+@app.post("/chat")
+def chat(request: ChatRequest):
+    try:
+        return generate.answer(request.question)
+    except MODEL_UNAVAILABLE_ERRORS as e:
+        raise HTTPException(503, f"{MODEL_DOWN} ({e})")
