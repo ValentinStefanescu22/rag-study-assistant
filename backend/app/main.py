@@ -5,7 +5,7 @@ from typing import Annotated
 
 import anthropic
 import httpx
-from fastapi import FastAPI, HTTPException, Query, UploadFile
+from fastapi import FastAPI, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from pypdf.errors import PdfReadError
 
@@ -57,6 +57,22 @@ def upload_document(file: UploadFile):
 @app.get("/documents")
 def list_documents():
     return db.list_documents()
+
+
+# The original PDF. "inline" makes the browser show it instead of downloading it,
+# and the frontend appends #page=7 so the browser's PDF viewer opens on that page.
+@app.get("/documents/{doc_id}/file")
+def get_document_file(doc_id: int):
+    pdf = db.get_pdf(doc_id)
+    if pdf is None:
+        raise HTTPException(404, "No PDF stored for this document. Try re-uploading it.")
+    return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline"})
+
+
+@app.delete("/documents/{doc_id}", status_code=204)
+def delete_document(doc_id: int):
+    if not db.delete_document(doc_id):
+        raise HTTPException(404, "Document not found.")
 
 
 # Retrieval only, no LLM: shows which chunks a question finds and how similar they are.

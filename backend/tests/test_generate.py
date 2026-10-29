@@ -7,7 +7,10 @@ from app import generate
 
 
 def chunk(page: int, similarity: float) -> dict:
-    return {"filename": "intro.pdf", "page_number": page, "content": f"text of page {page}", "similarity": similarity}
+    return {
+        "document_id": 3, "filename": "intro.pdf", "page_number": page,
+        "content": f"text of page {page}", "similarity": similarity,
+    }
 
 
 @pytest.fixture
@@ -48,7 +51,7 @@ def test_only_cited_sources_are_returned(fake_search, fake_chat):
 
     assert result["found"] is True
     assert result["answer"] == "Assignments go to Themis [2]."
-    assert result["sources"] == [{"n": 2, "filename": "intro.pdf", "page_number": 7}]
+    assert result["sources"] == [{"n": 2, "document_id": 3, "filename": "intro.pdf", "page_number": 7}]
 
 
 def test_made_up_citation_numbers_are_ignored(fake_search, fake_chat):

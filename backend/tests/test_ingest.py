@@ -21,7 +21,7 @@ def test_chunks_keep_their_page_number(monkeypatch):
     monkeypatch.setattr(ingest, "embed_documents", lambda texts: [[0.0] * 768 for _ in texts])
     saved = []
 
-    def fake_save_document(filename, page_count, chunks):
+    def fake_save_document(filename, pdf, page_count, chunks):
         saved.extend(chunks)
         return 1
 

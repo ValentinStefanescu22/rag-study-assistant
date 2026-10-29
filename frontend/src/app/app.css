@@ -1,0 +1,29 @@
+.shell {
+  display: grid;
+  grid-template-columns: 18.5rem 1fr;
+  height: 100dvh;
+}
+
+.sidebar {
+  overflow-y: auto;
+  border-right: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.main {
+  min-height: 0;
+}
+
+/* Phones: lectures on top (scrollable, capped), chat below. */
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    max-height: 32dvh;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+}

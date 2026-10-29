@@ -29,6 +29,8 @@ def test_db(monkeypatch):
             if not conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone():
                 conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     except psycopg.OperationalError:
+        if os.getenv("CI"):  # GitHub Actions sets CI=true: there, a missing DB is a failure, not a skip
+            raise
         pytest.skip("Postgres isn't running (docker compose up -d db)")
 
     monkeypatch.setattr(db, "DATABASE_URL", TEST_DATABASE_URL)
@@ -40,7 +42,7 @@ def test_db(monkeypatch):
 def test_search_ranks_by_cosine_similarity(test_db):
     halfway = unit_vector(0)
     halfway[1] = 1.0  # [1, 1, 0, ...] points 45° away from axis 0
-    db.save_document("test.pdf", 3, [
+    db.save_document("test.pdf", b"", 3, [
         (1, "same direction", unit_vector(0)),
         (2, "45 degrees away", halfway),
         (3, "perpendicular", unit_vector(1)),
@@ -56,6 +58,18 @@ def test_search_ranks_by_cosine_similarity(test_db):
 
 
 def test_k_limits_the_number_of_results(test_db):
-    db.save_document("test.pdf", 3, [(page, "text", unit_vector(page)) for page in (1, 2, 3)])
+    db.save_document("test.pdf", b"", 3, [(page, "text", unit_vector(page)) for page in (1, 2, 3)])
 
     assert len(db.search_chunks(unit_vector(1), k=2)) == 2
+
+
+def test_pdf_is_stored_and_deleted_with_its_chunks(test_db):
+    doc_id = db.save_document("test.pdf", b"%PDF-fake", 1, [(1, "text", unit_vector(0))])
+
+    assert db.get_pdf(doc_id) == b"%PDF-fake"
+    assert db.search_chunks(unit_vector(0), k=1)[0]["document_id"] == doc_id
+
+    assert db.delete_document(doc_id) is True
+    assert db.get_pdf(doc_id) is None
+    assert db.search_chunks(unit_vector(0), k=1) == []  # chunks went with it (cascade)
+    assert db.delete_document(doc_id) is False  # already gone

@@ -425,3 +425,209 @@ into an automated eval set.
 - Refused by threshold (layer 1): **~0.1 s**, no LLM call
 - Refused by the model (layer 2): **~2.5 s**
 - Short answer: **3–7 s**. The first request after startup takes ~10 s while the model loads into memory.
+
+---
+
+## Phase 4: Frontend (Angular 22)
+
+### Standalone components
+A component is a TypeScript class + an HTML template + CSS. "Standalone" means it lists what
+it uses in its own `imports` array ([`app.ts`](../frontend/src/app/app.ts) imports `Documents`
+and `Chat`), with no `NgModule`. It's the default since Angular 19; NgModules are legacy.
+Angular 20+ naming drops the `.component` suffix: `chat.ts`, `chat.html`, `chat.css`.
+
+### Signals
+A **signal** is a value that tells Angular when it changes:
+```ts
+turns = signal<Turn[]>([]);         // create
+turns()                             // read (in code or template)
+turns.set([...]) / turns.update(t => [...t, next])   // write
+asking = computed(() => turns().some(t => !t.response));  // derived, updates itself
+```
+When a template reads `turns()`, Angular knows that part of the page depends on it and
+re-renders only that when it changes.
+
+**Always give a signal a new value, never mutate the old one.** `turns().push(x)` changes the
+array, but the signal still holds the same array object, so Angular sees no change. That's why
+the code uses `[...turns, next]` and `.map()`/`.filter()`.
+
+> **In an interview:** "Signals are fine-grained reactive state: Angular tracks which templates read which signals and re-renders just those parts."
+
+### Zoneless change detection
+Older Angular used **zone.js** to patch every browser event, timer and HTTP call, then
+re-checked the *whole* app after each one. Angular 22 is **zoneless** by default: it
+re-renders when a signal it depends on changes (or an event in a template fires). It's faster
+and more predictable, but it's also why state must live in signals. A plain class field
+changed after an `await` wouldn't update the screen.
+
+### Signals vs RxJS (Observables)
+`HttpClient` returns an **Observable**, a stream that can emit many values over time (RxJS).
+A request emits once, so we convert it with `firstValueFrom(...)` into a Promise and use
+`async/await`. RxJS is still the right tool for real streams (websockets, typeahead with
+debounce); signals are for state.
+
+### `inject()`
+`private readonly api = inject(Api);` asks Angular's **dependency injection** for the shared
+`Api` service (`providedIn: 'root'` = one instance for the whole app). It's the modern
+alternative to constructor parameters.
+
+### Template control flow
+`@if (...) { } @else { }`, `@for (item of list; track item.id) { }`. `track` tells Angular
+how to recognise the same item between renders, so it can keep DOM nodes instead of
+rebuilding them. Templates are type-checked: `@if (segment.kind === 'cite')` narrows the type
+like TypeScript, but **not in an `@else` branch**. That's why the chat template uses two
+`@if`s (we hit this as a build error).
+
+### Same-origin policy, CORS, and the dev proxy
+Browsers block a page from reading responses from a different **origin** (scheme + host +
+port) unless that server allows it with **CORS** headers. `localhost:4200` (Angular) and
+`localhost:8000` (FastAPI) are different origins.
+
+We avoided CORS entirely: the Angular dev server **proxies** `/api/*` to the backend
+([`proxy.conf.json`](../frontend/proxy.conf.json)), so the browser only ever talks to
+`localhost:4200`. In Phase 5, nginx does the same in production. Fewer moving parts, and no
+"allow any origin" settings left behind by accident.
+
+> **In an interview:** "I serve the API under /api on the same origin via a proxy, so there's no CORS configuration to get wrong."
+
+### Multipart uploads
+Files go up as `multipart/form-data`: the body is split into parts, each with its own
+headers. In the browser, `new FormData()` + `form.append('file', file)` builds it, and
+FastAPI's `UploadFile` reads it. Don't set `Content-Type` yourself: the browser adds the
+"boundary" string that separates the parts.
+
+### XSS: never put model output in `innerHTML`
+**Cross-site scripting** = getting your own HTML/JS to run on someone else's page. An LLM
+answer is untrusted text: it's built from PDF content (anyone could have written it) and
+model output. If we rendered it with `innerHTML` to turn `[1]` into links, a slide containing
+`<img src=x onerror=...>` could run code.
+
+Instead [`citations.ts`](../frontend/src/app/citations.ts) splits the answer into text pieces
+and citation pieces, and the template renders text with `{{ }}` (always escaped) and
+citations as real `<a>` elements. That's safe by construction, not by filtering.
+(Angular also sanitises `[innerHTML]`, but not needing it at all is better.)
+
+> **In an interview:** "LLM output is untrusted input. I parse citations into a typed structure and render it with escaped interpolation, so model or document text can never become markup."
+
+### Opening a PDF on a page: `#page=N`
+Browsers' built-in PDF viewers read the URL fragment: `/api/documents/3/file#page=7` opens
+page 7. The backend sends `Content-Disposition: inline` so the browser displays the PDF
+instead of downloading it. The fragment (`#...`) is never sent to the server; it's only
+for the viewer.
+
+### Files in Postgres (`BYTEA`) vs object storage
+We store each original PDF in a `BYTEA` column next to its chunks:
+- ✅ Delete and replace are one transaction (file and chunks can't get out of sync), and there are no files on disk or extra Docker volumes.
+- ❌ Large files bloat the database and its backups, and every download goes through the app.
+
+At scale you'd put files in **object storage** (S3, MinIO) and keep only a key in the DB.
+For a few hundred lecture PDFs, the simple version is the right call.
+
+### Loading and error states in AI UIs
+Answers take seconds (10+ s when Ollama first loads the model), so:
+- The question appears **immediately**, with a "Reading your slides…" state; the button is disabled so you can't send twice.
+- Errors are shown in place, with the backend's own message (`{"detail": ...}` from FastAPI), and not as a spinner that never ends.
+- "Not found" is a normal, calm result, not an error: it means the system worked.
+- `aria-live="polite"` makes screen readers announce new answers.
+
+### Small dedupe, real UX difference
+Several chunks can come from one page, so the model sometimes cites `[1][2][3]` that are all
+page 3. The raw output rendered as "p.3 p.3 p.3". `answerSegments` collapses repeats of the
+same page that sit next to each other, and `uniquePages` lists each page once. Lesson:
+**look at real output in the real UI**. Unit tests on the backend didn't show this.
+
+---
+
+## Phase 5: Docker Compose + CI
+
+### Image vs container
+- **Image:** a read-only package of everything an app needs (OS files, Python, packages, code). Built from a `Dockerfile`.
+- **Container:** a running instance of an image. You can start many containers from one image, and deleting a container doesn't delete the image.
+
+Analogy: the image is a class, the container is an object.
+
+### Layers and build caching
+Each `Dockerfile` instruction creates a **layer**. Docker reuses a layer if that instruction
+and everything before it are unchanged. So **order matters**:
+
+```dockerfile
+COPY pyproject.toml uv.lock ./      # changes rarely
+RUN uv sync --locked --no-dev       # slow, now cached until the lockfile changes
+COPY app ./app                      # changes often, but only this layer rebuilds
+```
+
+If we copied the code first, every code edit would reinstall all dependencies. The frontend
+does the same with `package-lock.json` → `npm ci` → source. `.dockerignore` keeps `.venv` and
+`node_modules` out of the build, so the image stays small and the cache isn't invalidated
+by local files.
+
+### Multi-stage builds
+[`frontend/Dockerfile`](../frontend/Dockerfile) has two stages: a `node` image builds the
+Angular app, then a fresh `nginx` image copies in **only the built files**. Node, the 287
+npm packages and the source code never reach the final image. The result is smaller, faster
+to pull, and has less attack surface.
+
+> **In an interview:** "Multi-stage builds separate build-time tools from runtime: the final image only contains what's needed to run."
+
+### Running as non-root
+By default a container's process runs as root (inside the container). The backend image
+creates `appuser` and switches to it with `USER`, so if the app were ever compromised, the
+attacker wouldn't have root inside the container. It's cheap, and expected in production.
+
+### Compose networking: service names are hostnames
+Compose puts all services on one private network with built-in DNS. The backend reaches the
+database at `db:5432` and nginx reaches the backend at `backend:8000`. **Inside** a container,
+`localhost` means that container itself, not your Mac. That's why the backend can't use
+`localhost:5433`.
+
+Only `frontend` publishes a port (`8080:80`). The backend has **no** public port: the only
+way in is through nginx, so there's one entry point to secure.
+
+### `host.docker.internal`
+A special hostname for "the machine running Docker". The backend container uses
+`http://host.docker.internal:11434` to reach Ollama running natively on the Mac.
+`extra_hosts: host.docker.internal:host-gateway` makes the same compose file work on Linux,
+where that name doesn't exist by default.
+
+### Healthchecks and `depends_on`
+`depends_on: db` alone only waits until the database **container has started**. Postgres
+needs a few more seconds before it accepts connections, so the backend would crash on startup
+(it creates tables at startup). With a healthcheck (`pg_isready`) and
+`condition: service_healthy`, Compose waits until the database is actually ready.
+
+> **In an interview:** "Started isn't ready. I gate dependent services on a healthcheck."
+
+### Configuration and secrets: `.env`
+Settings come from environment variables (the **12-factor app** idea: same image,
+different config per environment). Compose loads an optional `.env` file into the backend;
+anything unset falls back to the defaults in `config.py`, so defaults live in one place.
+`.env` is in `.gitignore`, and `.env.example` documents the options without real values.
+**API keys never go in the repo or the image.**
+
+### nginx as a reverse proxy
+A **reverse proxy** sits in front of your app servers: the browser talks only to nginx, and
+nginx serves the static Angular files and forwards `/api/*` to the backend. Production
+gotchas we hit on purpose ([`nginx.conf`](../frontend/nginx.conf)):
+- `client_max_body_size 50m`: nginx rejects bodies over **1 MB** by default with a 413, so PDF uploads would fail before reaching FastAPI. Verified: a 5 MB upload reached the backend.
+- `proxy_read_timeout 300s`: nginx gives up after **60 s** by default with a 504. A local LLM answer or a big upload can take longer.
+- `try_files ... /index.html`: unknown paths serve the Angular app instead of a 404.
+
+### `root_path`
+Behind the proxy, the backend lives at `/api`, but nginx strips that prefix, so FastAPI
+sees `/chat`. `--root-path /api` tells FastAPI its public prefix, so the generated docs
+page loads `/api/openapi.json` instead of a broken `/openapi.json`.
+
+### CI (Continuous Integration) with GitHub Actions
+On every push and PR, GitHub starts fresh Linux machines and runs
+[`ci.yml`](../.github/workflows/ci.yml). There are three **jobs**, and they run in parallel:
+- **backend:** a **service container** (a throwaway Postgres + pgvector just for this job), `uv sync --locked`, then `pytest`.
+- **frontend:** `npm ci`, `ng test`, `ng build`.
+- **docker:** `docker compose build`, which proves the images still build.
+
+Key ideas:
+- **`--locked` / `npm ci`:** install exactly what the lockfile says, and fail if the lockfile is out of date. CI should test what you'll actually ship.
+- **No real models in CI.** Ollama with a 7B model on a CI runner would be slow and flaky, so the tests use fakes (`monkeypatch`) for the model calls. CI tests *our* logic; model quality is a separate job for an eval set (Phase 6).
+- **A skip is not a pass.** The DB tests skip locally when Postgres isn't running, but in CI (`CI=true`) they fail instead, so a broken service container can't produce a green check.
+- **Caching:** `setup-uv` and `setup-node` cache downloaded packages between runs, so CI gets faster.
+
+> **In an interview:** "CI runs unit tests with faked model calls, integration tests against a real pgvector service container, and verifies the Docker images build. LLM quality is evaluated separately with an eval set, because it's non-deterministic and slow."

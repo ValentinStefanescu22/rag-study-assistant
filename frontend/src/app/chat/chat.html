@@ -1,0 +1,75 @@
+<div class="log" aria-live="polite">
+  <div class="column">
+    @if (turns().length === 0) {
+      <div class="intro">
+        <h1>Ask your lectures</h1>
+        <p>
+          Answers come only from the PDFs you upload, and each one is flagged with the page it came
+          from. If your slides don't cover something, you'll be told so instead of getting a guess.
+        </p>
+      </div>
+    }
+
+    @for (turn of turns(); track $index) {
+      <article class="turn">
+        <p class="question">{{ turn.question }}</p>
+
+        @if (turn.response; as response) {
+          @if (response.found) {
+            <!-- Built from text pieces and links, never innerHTML: model output can't run as HTML.
+                 Text sits in a one-line <span> so template indentation doesn't leak into the answer. -->
+            <p class="answer">
+              @for (segment of turn.segments; track $index) {
+                @if (segment.kind === 'text') {
+                  <span>{{ segment.text }}</span>
+                }
+                @if (segment.kind === 'cite') {
+                  <a
+                    class="flag"
+                    [href]="api.fileUrl(segment.source.document_id, segment.source.page_number)"
+                    target="_blank"
+                    rel="noopener"
+                    [title]="'Open ' + segment.source.filename + ' on page ' + segment.source.page_number"
+                    >p.{{ segment.source.page_number }}</a
+                  >
+                }
+              }
+            </p>
+            <ul class="sources" aria-label="Sources">
+              @for (s of turn.pages; track s.n) {
+                <li>
+                  <a [href]="api.fileUrl(s.document_id, s.page_number)" target="_blank" rel="noopener">
+                    <span class="flag">p.{{ s.page_number }}</span>
+                    <span class="file">{{ s.filename }}</span>
+                  </a>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="not-found">{{ response.answer }}</p>
+          }
+        } @else if (turn.error) {
+          <p class="error" role="alert">{{ turn.error }}</p>
+        } @else {
+          <p class="thinking" role="status">Reading your slides</p>
+        }
+      </article>
+    }
+    <div #end></div>
+  </div>
+</div>
+
+<form class="composer" (submit)="$event.preventDefault(); ask(box)">
+  <div class="column row">
+    <label for="question" class="visually-hidden">Your question</label>
+    <textarea
+      #box
+      id="question"
+      rows="2"
+      maxlength="1000"
+      placeholder="Ask about your lectures"
+      (keydown)="onKeydown($event, box)"
+    ></textarea>
+    <button type="submit" [disabled]="asking()">Ask</button>
+  </div>
+</form>

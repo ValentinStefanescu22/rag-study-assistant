@@ -1,0 +1,199 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.column {
+  width: 100%;
+  max-width: 44rem;
+  margin-inline: auto;
+  padding-inline: 2rem;
+}
+
+.log {
+  flex: 1;
+  overflow-y: auto;
+  padding-block: 2.5rem 1rem;
+}
+
+.intro h1 {
+  margin: 0 0 0.75rem;
+  font-family: var(--serif);
+  font-size: 2.1rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.intro p {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.turn + .turn {
+  margin-top: 2.25rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--rule);
+}
+
+.question {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.answer {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.125rem;
+  line-height: 1.7;
+  white-space: pre-wrap; /* keep the model's line breaks and lists */
+}
+
+/* The page flag: a sticky tab marking the slide an answer came from. */
+.flag {
+  display: inline-block;
+  margin-inline: 0.15em;
+  padding: 0 0.4em 0 0.35em;
+  border-left: 3px solid var(--flag-edge);
+  border-radius: 1px 5px 5px 1px;
+  background: var(--flag);
+  color: var(--flag-ink);
+  font-family: var(--sans);
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1.6;
+  text-decoration: none;
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+a.flag:hover {
+  background: var(--flag-edge);
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+
+.sources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.sources a:hover .file {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.sources .flag {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.not-found {
+  margin: 0;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: 1.125rem;
+  font-style: italic;
+}
+
+.error {
+  margin: 0;
+  color: var(--error);
+}
+
+.thinking {
+  margin: 0;
+  color: var(--muted);
+}
+
+.thinking::after {
+  content: '…';
+  display: inline-block;
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking::after {
+    animation: none;
+  }
+}
+
+.composer {
+  padding-block: 1rem 1.5rem;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+textarea {
+  flex: 1;
+  min-height: 3.2rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+}
+
+textarea:focus {
+  border-color: var(--ink);
+  outline: none;
+}
+
+button[type='submit'] {
+  padding: 0.8rem 1.4rem;
+  border: none;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button[type='submit']:disabled {
+  opacity: 0.4;
+  cursor: progress;
+}
+
+@media (max-width: 760px) {
+  .column {
+    padding-inline: 1rem;
+  }
+
+  .log {
+    padding-top: 1.5rem;
+  }
+}

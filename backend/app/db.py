@@ -25,13 +25,13 @@ def connect() -> psycopg.Connection:
 
 
 # Store a document and its (page_number, text, embedding) chunks. Re-uploading a filename replaces it.
-def save_document(filename: str, page_count: int, chunks: list[tuple[int, str, list[float]]]) -> int:
+def save_document(filename: str, pdf: bytes, page_count: int, chunks: list[tuple[int, str, list[float]]]) -> int:
     # `with conn` = one transaction: if anything fails, nothing is half-saved.
     with connect() as conn:
         conn.execute("DELETE FROM documents WHERE filename = %s", (filename,))  # cascades to its chunks
         doc_id = conn.execute(
-            "INSERT INTO documents (filename, page_count) VALUES (%s, %s) RETURNING id",
-            (filename, page_count),
+            "INSERT INTO documents (filename, pdf, page_count) VALUES (%s, %s, %s) RETURNING id",
+            (filename, pdf, page_count),
         ).fetchone()["id"]
         conn.cursor().executemany(
             "INSERT INTO chunks (document_id, page_number, content, embedding) VALUES (%s, %s, %s, %s)",
@@ -45,7 +45,7 @@ def save_document(filename: str, page_count: int, chunks: list[tuple[int, str, l
 def search_chunks(embedding: list[float], k: int) -> list[dict]:
     with connect() as conn:
         return conn.execute("""
-            SELECT c.id, d.filename, c.page_number, c.content,
+            SELECT c.id, d.id AS document_id, d.filename, c.page_number, c.content,
                    1 - (c.embedding <=> %(q)s) AS similarity
             FROM chunks c JOIN documents d ON d.id = c.document_id
             ORDER BY c.embedding <=> %(q)s
@@ -53,6 +53,20 @@ def search_chunks(embedding: list[float], k: int) -> list[dict]:
         """, {"q": Vector(embedding), "k": k}).fetchall()
 
 
+# The stored PDF bytes, or None if the document doesn't exist or was uploaded before PDFs were stored.
+def get_pdf(doc_id: int) -> bytes | None:
+    with connect() as conn:
+        row = conn.execute("SELECT pdf FROM documents WHERE id = %s", (doc_id,)).fetchone()
+    return row["pdf"] if row else None
+
+
+# True if a document was deleted. Its chunks go with it (ON DELETE CASCADE).
+def delete_document(doc_id: int) -> bool:
+    with connect() as conn:
+        return conn.execute("DELETE FROM documents WHERE id = %s", (doc_id,)).rowcount == 1
+
+
+# Deliberately doesn't select `pdf`: a list shouldn't carry megabytes of file data.
 def list_documents() -> list[dict]:
     with connect() as conn:
         return conn.execute("""

@@ -1,3 +1,6 @@
+# The whole app: `docker compose up --build`, then open http://localhost:8080
+# Ollama runs natively on your Mac (Docker on macOS can't use the GPU).
+
 services:
   db:
     # Official Postgres image with the pgvector extension pre-installed.
@@ -8,10 +11,43 @@ services:
       POSTGRES_DB: rag
     ports:
       # 5433 on your Mac -> 5432 in the container (5432 is taken by a local Postgres).
+      # Only needed for local development and psql; the backend container uses db:5432.
       - "5433:5432"
     volumes:
       # Named volume so your data survives `docker compose down`.
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # "Healthy" = Postgres accepts connections, not just "the container started".
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  backend:
+    build: ./backend
+    environment:
+      # Inside Compose's network, each service is reachable by its name.
+      DATABASE_URL: postgresql://rag:rag@db:5432/rag
+      OLLAMA_URL: http://host.docker.internal:11434
+    # Optional overrides (LLM_PROVIDER, CHAT_MODEL, ANTHROPIC_API_KEY...); see .env.example.
+    # Anything not set falls back to the defaults in backend/app/config.py.
+    env_file:
+      - path: .env
+        required: false
+    extra_hosts:
+      # Docker Desktop provides host.docker.internal; this makes it work on Linux too.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    # No published port: only nginx (frontend) talks to it.
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

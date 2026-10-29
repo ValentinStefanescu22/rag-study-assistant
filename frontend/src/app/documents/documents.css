@@ -1,0 +1,103 @@
+:host {
+  display: block;
+  padding: 1.75rem 1.25rem;
+}
+
+.heading {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.upload {
+  display: block;
+  padding: 0.6rem 0.9rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+
+.upload:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* The hidden input inside the label gets keyboard focus; show it on the label. */
+.upload:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.upload.busy {
+  border-color: var(--rule);
+  color: var(--muted);
+  background: none;
+  cursor: progress;
+}
+
+.status,
+.error,
+.empty {
+  margin: 0.9rem 0 0;
+  font-size: 0.9rem;
+}
+
+.status,
+.empty {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+.list {
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.75rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.name {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.name:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.pages {
+  grid-row: 2;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.remove {
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.remove:hover {
+  color: var(--error);
+  background: var(--error-soft);
+}

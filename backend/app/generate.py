@@ -44,10 +44,10 @@ def answer(question: str) -> dict:
 
     # The model only picks numbers; file and page come from our data, so they can't be invented.
     # Numbers that don't match a source (e.g. [9] when there are 5) are ignored.
-    cited = sorted({int(n) for n in re.findall(r"\[(\d+)\]", reply)})
+    cited = {int(n) for n in re.findall(r"\[(\d+)\]", reply)}
     sources = [
-        {"n": n, "filename": chunks[n - 1]["filename"], "page_number": chunks[n - 1]["page_number"]}
-        for n in cited
-        if 1 <= n <= len(chunks)
+        {"n": n, "document_id": c["document_id"], "filename": c["filename"], "page_number": c["page_number"]}
+        for n, c in enumerate(chunks, start=1)
+        if n in cited
     ]
     return {"answer": reply, "found": True, "sources": sources}

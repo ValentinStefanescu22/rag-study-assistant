@@ -1,0 +1,43 @@
+<h2 class="heading">Your lectures</h2>
+
+<!-- The real file input is visually hidden but still focusable; the label is what you see and click. -->
+<label class="upload" [class.busy]="uploading()">
+  <input
+    #fileInput
+    class="visually-hidden"
+    type="file"
+    accept="application/pdf"
+    multiple
+    [disabled]="uploading()"
+    (change)="upload(fileInput)"
+  />
+  {{ uploading() ? 'Uploading…' : 'Upload PDFs' }}
+</label>
+
+@if (uploading(); as name) {
+  <p class="status" role="status">Reading {{ name }}. Large lectures take a minute.</p>
+}
+@if (error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
+
+@if (documents().length === 0 && !uploading()) {
+  <p class="empty">Upload a lecture PDF to start asking questions about it.</p>
+}
+
+<ul class="list">
+  @for (doc of documents(); track doc.id) {
+    <li class="item">
+      <a class="name" [href]="api.fileUrl(doc.id)" target="_blank" rel="noopener">{{ doc.filename }}</a>
+      <span class="pages">{{ doc.page_count }} pages</span>
+      <button
+        type="button"
+        class="remove"
+        (click)="remove(doc)"
+        [attr.aria-label]="'Remove ' + doc.filename"
+      >
+        Remove
+      </button>
+    </li>
+  }
+</ul>

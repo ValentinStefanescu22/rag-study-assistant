@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS documents (
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- The original PDF, so citations can open it at the cited page. Nullable: documents
+-- uploaded before this column existed have no file (re-upload them).
+-- ponytail: fine for course PDFs; move to object storage (S3/MinIO) for many or large files.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS pdf BYTEA;
+
 CREATE TABLE IF NOT EXISTS chunks (
     id          SERIAL PRIMARY KEY,
     document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

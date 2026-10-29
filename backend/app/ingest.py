@@ -51,6 +51,7 @@ def ingest_pdf(filename: str, pdf_bytes: bytes) -> dict:
 
     doc_id = db.save_document(
         filename,
+        pdf_bytes,
         len(pages),
         [(page, text, vector) for (page, text), vector in zip(pieces, vectors)],
     )
