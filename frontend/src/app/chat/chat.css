@@ -77,24 +77,31 @@ a.flag:hover {
 }
 
 .sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
   margin: 1.1rem 0 0;
   padding: 0;
   list-style: none;
   font-size: 0.9rem;
 }
 
-.sources a {
-  display: inline-flex;
+/* One line per file: the filename, then its page flags (wrapping as needed). */
+.sources li {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
+}
+
+.sources li + li {
+  margin-top: 0.4rem;
+}
+
+.sources .file {
+  margin-right: 0.25rem;
   color: var(--muted);
   text-decoration: none;
 }
 
-.sources a:hover .file {
+.sources .file:hover {
   color: var(--blue);
   text-decoration: underline;
 }
@@ -196,4 +203,10 @@ button[type='submit']:disabled {
   .log {
     padding-top: 1.5rem;
   }
+}
+
+.hint {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }

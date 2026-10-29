@@ -1,5 +1,5 @@
 import { Source } from './api';
-import { answerSegments, splitCitations, uniquePages } from './citations';
+import { answerSegments, sourcesByFile, splitCitations } from './citations';
 
 const source = (n: number, page: number, document_id = 1): Source => ({
   n,
@@ -59,9 +59,12 @@ describe('answerSegments', () => {
   });
 });
 
-describe('uniquePages', () => {
-  it('keeps one entry per document page', () => {
-    const sources = [source(1, 3), source(2, 3), source(3, 3, 2)];
-    expect(uniquePages(sources)).toEqual([source(1, 3), source(3, 3, 2)]);
+describe('sourcesByFile', () => {
+  it('lists each file once, with each page once, in page order', () => {
+    const sources = [source(1, 7), source(2, 3), source(3, 7), source(4, 3, 2)];
+    expect(sourcesByFile(sources)).toEqual([
+      { document_id: 1, filename: 'intro.pdf', pages: [source(2, 3), source(1, 7)] },
+      { document_id: 2, filename: 'intro.pdf', pages: [source(4, 3, 2)] },
+    ]);
   });
 });

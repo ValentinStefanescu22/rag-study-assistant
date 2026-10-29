@@ -1,6 +1,6 @@
 <div class="log" aria-live="polite">
   <div class="column">
-    @if (turns().length === 0) {
+    @if (conversation.turns().length === 0) {
       <div class="intro">
         <h1>Ask your lectures</h1>
         <p>
@@ -10,9 +10,9 @@
       </div>
     }
 
-    @for (turn of turns(); track $index) {
+    @for (turn of conversation.turns(); track $index) {
       <article class="turn">
-        <p class="question">{{ turn.question }}</p>
+        <p class="question">{{ turn.title }}</p>
 
         @if (turn.response; as response) {
           @if (response.found) {
@@ -36,12 +36,19 @@
               }
             </p>
             <ul class="sources" aria-label="Sources">
-              @for (s of turn.pages; track s.n) {
+              @for (file of turn.files; track file.document_id) {
                 <li>
-                  <a [href]="api.fileUrl(s.document_id, s.page_number)" target="_blank" rel="noopener">
-                    <span class="flag">p.{{ s.page_number }}</span>
-                    <span class="file">{{ s.filename }}</span>
-                  </a>
+                  <a class="file" [href]="api.fileUrl(file.document_id)" target="_blank" rel="noopener">{{ file.filename }}</a>
+                  @for (s of file.pages; track s.page_number) {
+                    <a
+                      class="flag"
+                      [href]="api.fileUrl(s.document_id, s.page_number)"
+                      target="_blank"
+                      rel="noopener"
+                      [attr.aria-label]="file.filename + ', page ' + s.page_number"
+                      >p.{{ s.page_number }}</a
+                    >
+                  }
                 </li>
               }
             </ul>
@@ -51,7 +58,10 @@
         } @else if (turn.error) {
           <p class="error" role="alert">{{ turn.error }}</p>
         } @else {
-          <p class="thinking" role="status">Reading your slides</p>
+          <p class="thinking" role="status">{{ turn.waiting }}</p>
+          @if (turn.hint) {
+            <p class="hint">{{ turn.hint }}</p>
+          }
         }
       </article>
     }
@@ -70,6 +80,6 @@
       placeholder="Ask about your lectures"
       (keydown)="onKeydown($event, box)"
     ></textarea>
-    <button type="submit" [disabled]="asking()">Ask</button>
+    <button type="submit" [disabled]="conversation.busy()">Ask</button>
   </div>
 </form>

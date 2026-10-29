@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS documents (
 -- ponytail: fine for course PDFs; move to object storage (S3/MinIO) for many or large files.
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS pdf BYTEA;
 
+-- Lecture summary, made the first time someone asks for it (see summarize.py).
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
+
 CREATE TABLE IF NOT EXISTS chunks (
     id          SERIAL PRIMARY KEY,
     document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,

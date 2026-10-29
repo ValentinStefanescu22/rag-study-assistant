@@ -31,9 +31,26 @@ export function answerSegments(answer: string, sources: Source[]): Segment[] {
   return segments;
 }
 
-// Each cited page once, for the source list under the answer.
-export function uniquePages(sources: Source[]): Source[] {
-  return sources.filter((s, i) => sources.findIndex((other) => samePage(other, s)) === i);
+export interface FileSources {
+  document_id: number;
+  filename: string;
+  pages: Source[];
+}
+
+// The source list under an answer: each file once, with each of its cited pages once, in
+// page order. A summary can cite 28 pages of one lecture; this shows the filename one time.
+export function sourcesByFile(sources: Source[]): FileSources[] {
+  const files: FileSources[] = [];
+  for (const source of sources) {
+    let file = files.find((f) => f.document_id === source.document_id);
+    if (!file) {
+      file = { document_id: source.document_id, filename: source.filename, pages: [] };
+      files.push(file);
+    }
+    if (!file.pages.some((p) => p.page_number === source.page_number)) file.pages.push(source);
+  }
+  for (const file of files) file.pages.sort((a, b) => a.page_number - b.page_number);
+  return files;
 }
 
 function samePage(a: Source, b: Source): boolean {

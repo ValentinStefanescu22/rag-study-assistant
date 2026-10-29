@@ -70,6 +70,16 @@ def test_model_saying_not_found_is_a_refusal(fake_search, fake_chat):
     }
 
 
+def test_a_partial_answer_with_a_tacked_on_not_found_is_still_an_answer(fake_search, fake_chat):
+    fake_search([chunk(3, 0.68)])
+    fake_chat("The course book is Information Security [1]. [NOT_FOUND]")
+
+    result = generate.answer("Which books should I read?")
+
+    assert result["found"] is True
+    assert result["answer"] == "The course book is Information Security [1]."
+
+
 def test_low_scoring_chunks_are_left_out_of_the_prompt(fake_search, fake_chat):
     fake_search([chunk(4, 0.70), chunk(5, 0.40)])
     calls = fake_chat("Answer [1].")

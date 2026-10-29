@@ -52,6 +52,11 @@ export class Api {
     return firstValueFrom(this.http.post<ChatResponse>(`${API}/chat`, { question }));
   }
 
+  // Same response shape as ask(), so a summary shows up like any other answer.
+  summarize(documentId: number) {
+    return firstValueFrom(this.http.post<ChatResponse>(`${API}/documents/${documentId}/summary`, {}));
+  }
+
   // The browser's PDF viewer understands #page=N and opens the file on that page.
   fileUrl(documentId: number, page = 1) {
     return `${API}/documents/${documentId}/file#page=${page}`;

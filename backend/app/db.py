@@ -60,6 +60,19 @@ def get_pdf(doc_id: int) -> bytes | None:
     return row["pdf"] if row else None
 
 
+# Everything needed to summarise one document, or None if it doesn't exist.
+def get_document(doc_id: int) -> dict | None:
+    with connect() as conn:
+        return conn.execute(
+            "SELECT id, filename, page_count, pdf, summary FROM documents WHERE id = %s", (doc_id,)
+        ).fetchone()
+
+
+def save_summary(doc_id: int, summary: str) -> None:
+    with connect() as conn:
+        conn.execute("UPDATE documents SET summary = %s WHERE id = %s", (summary, doc_id))
+
+
 # True if a document was deleted. Its chunks go with it (ON DELETE CASCADE).
 def delete_document(doc_id: int) -> bool:
     with connect() as conn:

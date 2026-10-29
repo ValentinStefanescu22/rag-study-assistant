@@ -35,6 +35,9 @@ cd frontend && npm install && npm start          # app on http://localhost:4200 
 Tests: `cd backend && uv run pytest` and `cd frontend && npx ng test --watch=false`.
 CI runs both, plus `docker compose build`, on every push ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
 
+Eval (needs Ollama and your uploaded lectures, so not in CI): `cd backend && uv run python -m eval.run`,
+add `--answers` to also score full answers.
+
 ## How it works
 
 Concepts behind each step, written up for interview prep: [docs/learning-notes.md](docs/learning-notes.md).

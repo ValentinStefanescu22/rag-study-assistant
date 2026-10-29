@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from pypdf.errors import PdfReadError
 
-from app import db, generate, retrieve
+from app import db, generate, retrieve, summarize
 from app.ingest import ingest_pdf
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -67,6 +67,18 @@ def get_document_file(doc_id: int):
     if pdf is None:
         raise HTTPException(404, "No PDF stored for this document. Try re-uploading it.")
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": "inline"})
+
+
+# POST, not GET: the first call generates the summary and stores it (it changes data).
+@app.post("/documents/{doc_id}/summary")
+def summarize_document(doc_id: int):
+    try:
+        result = summarize.summarize(doc_id)
+    except MODEL_UNAVAILABLE_ERRORS as e:
+        raise HTTPException(503, f"{MODEL_DOWN} ({e})")
+    if result is None:
+        raise HTTPException(404, "No PDF stored for this document. Try re-uploading it.")
+    return result
 
 
 @app.delete("/documents/{doc_id}", status_code=204)

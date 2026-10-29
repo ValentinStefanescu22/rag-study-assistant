@@ -25,19 +25,41 @@
   <p class="empty">Upload a lecture PDF to start asking questions about it.</p>
 }
 
+@if (documents().length > 1) {
+  <button
+    type="button"
+    class="summarize-all"
+    [disabled]="conversation.busy() || uploading()"
+    (click)="summarizeAll()"
+  >
+    Summarize all lectures
+  </button>
+}
+
 <ul class="list">
   @for (doc of documents(); track doc.id) {
     <li class="item">
       <a class="name" [href]="api.fileUrl(doc.id)" target="_blank" rel="noopener">{{ doc.filename }}</a>
       <span class="pages">{{ doc.page_count }} pages</span>
-      <button
-        type="button"
-        class="remove"
-        (click)="remove(doc)"
-        [attr.aria-label]="'Remove ' + doc.filename"
-      >
-        Remove
-      </button>
+      <span class="actions">
+        <button
+          type="button"
+          class="action"
+          [disabled]="conversation.busy() || uploading()"
+          (click)="conversation.summarize(doc)"
+          [attr.aria-label]="'Summarize ' + doc.filename"
+        >
+          Summarize
+        </button>
+        <button
+          type="button"
+          class="action remove"
+          (click)="remove(doc)"
+          [attr.aria-label]="'Remove ' + doc.filename"
+        >
+          Remove
+        </button>
+      </span>
     </li>
   }
 </ul>

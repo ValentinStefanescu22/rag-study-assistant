@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { Api, DocumentInfo, errorMessage } from '../api';
+import { Conversation } from '../conversation';
 
 @Component({
   selector: 'app-documents',
@@ -8,6 +9,7 @@ import { Api, DocumentInfo, errorMessage } from '../api';
 })
 export class Documents {
   protected readonly api = inject(Api);
+  protected readonly conversation = inject(Conversation);
 
   // Signals hold the component's state. Reading one in the template (`documents()`)
   // tells Angular to re-render that part whenever it changes.
@@ -43,6 +45,14 @@ export class Documents {
     }
     this.uploading.set(null);
     await this.refresh();
+  }
+
+  // One summary per lecture, one after another, in filename order (01-, 02-...).
+  protected async summarizeAll() {
+    const docs = [...this.documents()].sort((a, b) => a.filename.localeCompare(b.filename));
+    for (const doc of docs) {
+      await this.conversation.summarize(doc);
+    }
   }
 
   protected async remove(doc: DocumentInfo) {

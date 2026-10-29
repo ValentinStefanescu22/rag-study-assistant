@@ -631,3 +631,122 @@ Key ideas:
 - **Caching:** `setup-uv` and `setup-node` cache downloaded packages between runs, so CI gets faster.
 
 > **In an interview:** "CI runs unit tests with faked model calls, integration tests against a real pgvector service container, and verifies the Docker images build. LLM quality is evaluated separately with an eval set, because it's non-deterministic and slow."
+
+---
+
+## Phase 6: Lecture summaries + an eval set
+
+### Why top-k retrieval can't summarise
+RAG with top-k retrieval is built for **"needle" questions**: one fact on one or two slides.
+A summary is a **"whole haystack" question**: it needs every slide, and no single slide is
+"similar" to the word *summary*. Asking "summarise both lectures" retrieved one agenda slide
+(0.605) and four unrelated ones, and the model rightly refused. More chunks or a lower
+threshold doesn't fix it; a different pipeline does.
+
+> **In an interview:** "Top-k retrieval answers local questions. For global questions like summaries I added a separate map-reduce path, chosen explicitly by the UI."
+
+### Map-reduce summarisation
+[`summarize.py`](../backend/app/summarize.py):
+1. **Map:** split the slides into groups (~500 words, 6–8 slides) and ask the model for at most 3 cited bullet points per group.
+2. **Reduce:** ask the model for a 2–3 sentence overview of all the bullets.
+3. **Code** puts the overview + the bullets together. The model never rewrites the bullets.
+
+It's called map-reduce after the programming pattern: *map* the same operation over many
+pieces, then *reduce* the results into one. It's how you summarise text bigger than one
+prompt can handle.
+
+### Three iterations, measured, not guessed
+| Version | Result |
+|---|---|
+| 1. Big groups (27 slides), model rewrites everything in the reduce step | **0 citations** (lost in the rewrite), Markdown headings, long, 207 s |
+| 2. Reduce writes only the overview; code keeps the bullets | citations survive, but the model ignored "3–6 points" and wrote **one bullet per slide** (~47) |
+| 3. Small groups (~7 slides), "at most 3 points", skip empty slides | **26–27 cited bullets** for ~50 slides, no filler; 2–3 min the first time |
+
+Lessons:
+- **Don't ask a model to preserve what code can preserve for free.** Rewriting text is where small models drop details like citations.
+- Small models follow length rules better when the job is small. "Summarise 7 slides in 3 points" works; "summarise 27 slides in 5 points" doesn't.
+
+### Lazy computation + caching
+Summaries are made the **first time someone clicks Summarize**, not at upload, and stored in
+`documents.summary`. Uploads stay fast, you only pay for lectures you actually summarise,
+and the second click is instant (measured: 0 s). It can't go stale: re-uploading a lecture
+creates a new row, so the old summary goes with the old row.
+
+### Explicit routing vs intent classification
+How does the app know you want a summary? Two options:
+- **Intent classification:** detect "summarise…" in the question (keywords or an extra LLM call) and switch pipelines. It's magic when it works and confusing when it misfires.
+- **Explicit routing:** a **Summarize** button. Zero ambiguity, zero extra cost.
+
+We chose the button. In a chat-only product you'd classify, and you'd need an eval for the classifier too.
+
+### Shared state in an Angular service
+Both the sidebar (Summarize buttons) and the chat box add turns to the same conversation,
+so the `turns` signal moved out of `Chat` into
+[`conversation.ts`](../frontend/src/app/conversation.ts), an `@Injectable({providedIn: 'root'})`
+service. Every component that `inject(Conversation)`s gets **the same instance**, so they see
+the same signals. `busy` is a `computed()` both use to disable their buttons. In `Chat`, an
+`effect()` re-runs whenever `turns()` changes and scrolls to the newest turn, no matter which
+component added it.
+
+### Eval sets (a.k.a. golden questions)
+**Unit tests** check that *our code* does what we wrote, using fakes, and they're
+deterministic. An **eval** checks how well *the real system* performs (real embeddings, real
+model, real lectures), and it's statistical: you get a score, not pass/fail.
+[`eval/questions.json`](../backend/eval/questions.json) has 31 questions: 24 with the pages
+that answer them, and 7 that should be refused (3 clearly off-topic, 4 near-topic traps like
+"How does RSA work?", which is named on a slide but never explained).
+
+Run it: `cd backend && uv run python -m eval.run` (retrieval, ~2 s) or `--answers` (~5 min).
+It needs Ollama and your PDFs, so it's not in CI.
+
+### Retrieval metrics: hit@k and MRR
+- **hit@k:** share of questions whose right page is somewhere in the top *k* results. **hit@1** = ranked first.
+- **MRR (mean reciprocal rank):** for each question score 1 if the right page is first, ½ if second, ⅓ if third… 0 if missing, then average. One number that rewards ranking it *high*.
+
+Our results: **hit@1 0.96, hit@5 1.00, MRR 0.98**. The only miss is "limitations of the
+one-time pad", where the intro slide (p13) outranked the limitations slide (p17). It's still
+in the top 5, so the model still gets it.
+
+> **In an interview:** "I measure retrieval separately from generation with hit@k and MRR on a golden set; if retrieval misses, no prompt will fix it."
+
+### Refusal is a precision/recall trade-off
+- A **false refusal** (a real question refused) is bad, and at layer 1 it can't be recovered: the model never sees the question.
+- A **false answer** to an off-topic question is worse (a hallucination), but layer 2 (the model's NOT_FOUND) is a second chance to catch it.
+
+Raising the threshold refuses more off-topic questions early, but risks refusing real ones.
+
+### Calibrating the threshold with data (and how the eval almost fooled me)
+1. The first sweep said **raise 0.6 → 0.65**: it kept 100% of on-topic questions and refused 86% of off-topic ones early.
+2. But the set had no casual logistics questions. "Who are the teaching assistants?" (seen in Phase 2) scores **0.639** and would be refused. After adding three such questions, the suggestion dropped to **0.625**. **An eval only measures what it contains: write questions the way real users ask them.**
+3. End-to-end answers decided it:
+
+| Cut-off | Correct answers |
+|---|---|
+| **0.600** | **30/31** |
+| 0.625 | 28/31 (refused the TA question; the one-time pad got the wrong page because fewer sources passed) |
+
+So **0.6 stays**. Off-topic questions that pass layer 1 are already refused by layer 2,
+including RSA (best score 0.70, higher than some on-topic questions!), so a higher
+threshold only adds risk.
+
+### The eval found a real bug
+At 0.6, "which books should I read" was refused. The model wrote a **partial answer** ("the
+book *Information Security: Principles and Practice* is mentioned [1]…") and tacked
+`NOT_FOUND` on for the rest. Our check `"NOT_FOUND" in reply` threw the whole answer away.
+Fix: the prompt now says to answer the part the slides cover, and only a reply that *starts*
+with NOT_FOUND counts as a refusal. Result: **31/31**, with nothing else broken (that's the
+point of re-running the whole set after a change).
+
+### What the eval doesn't measure
+It checks *"refused or not"* and *"is a cited page an expected page"*. It doesn't check
+whether the answer is **complete or correct**. The books answer names 1 of the 3 books on
+slide 3 and still counts as a pass. To grade answer quality you'd add reference answers and
+an **LLM-as-judge**: a (usually stronger) model scores each answer against the reference
+("does it contain these facts? anything not in the sources?"). It's useful, but the judge
+needs checking too, and it costs a model call per question.
+
+### Why chunk size didn't matter here
+We planned to tune chunk size, then measured: every slide in both lectures is under 250 words,
+so **every slide is exactly one chunk** at our 250-word setting. Changing it would change
+nothing. Chunking matters for long-form text (books, papers, notes); for slide decks, the
+slide *is* the natural chunk. Measure your data before tuning a knob.
