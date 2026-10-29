@@ -1,43 +1,33 @@
 # RAG Study Assistant
 
-Upload lecture PDFs, ask questions, get answers that cite the exact file and page.
-If the answer isn't in your materials, it says so instead of guessing.
-Everything runs locally and for free: Angular + FastAPI + PostgreSQL/pgvector + Ollama.
+Upload your lecture PDFs and ask questions about them. Every answer cites the file and page
+it came from, and if your slides don't cover something, it says so instead of guessing.
+Runs locally and for free with Angular, FastAPI, PostgreSQL/pgvector and Ollama.
 
 ## Run it
 
-Prerequisites: Docker Desktop and [Ollama](https://ollama.com) running natively
-(on macOS, Docker can't use the GPU, so the models stay outside Docker).
+You need Docker Desktop and [Ollama](https://ollama.com).
 
 ```bash
-ollama pull nomic-embed-text   # embedding model
-ollama pull qwen2.5:7b         # chat model
-cp .env.example .env           # optional settings (e.g. switch to Claude)
+ollama pull nomic-embed-text
+ollama pull qwen2.5:7b
 docker compose up --build
 ```
 
-Open http://localhost:8080. The API docs are at http://localhost:8080/api/docs.
+Open http://localhost:8080.
 
-To answer with Claude instead of the local model, set `LLM_PROVIDER=claude` and
-`ANTHROPIC_API_KEY` in `.env` (paid; embeddings stay on Ollama).
+## Use it
 
-## Development
+- **Upload PDFs** in the sidebar.
+- **Ask a question.** The yellow page flags in the answer open the PDF on that page.
+- **Summarize** a lecture, or all of them, for a cited overview.
 
-Hot-reloading backend and frontend, with only the database in Docker.
-Needs [uv](https://docs.astral.sh/uv/) and Node 22.22+/24.15+/26+.
+To use Claude instead of the local model, set `LLM_PROVIDER=claude` and `ANTHROPIC_API_KEY` in a `.env` file (see `.env.example`).
 
-```bash
-docker compose up -d db                          # Postgres + pgvector on localhost:5433
-cd backend && uv run fastapi dev app/main.py     # API on http://localhost:8000
-cd frontend && npm install && npm start          # app on http://localhost:4200 (second terminal)
-```
+## What I learned
 
-Tests: `cd backend && uv run pytest` and `cd frontend && npx ng test --watch=false`.
-CI runs both, plus `docker compose build`, on every push ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
-
-Eval (needs Ollama and your uploaded lectures, so not in CI): `cd backend && uv run python -m eval.run`,
-add `--answers` to also score full answers.
-
-## How it works
-
-Concepts behind each step, written up for interview prep: [docs/learning-notes.md](docs/learning-notes.md).
+- **Chunking:** splitting documents into small pieces (here, one per slide) so search can find the exact part that answers a question.
+- **Embeddings:** turning text into vectors so that text with similar meaning ends up close together.
+- **Vector search and indexing:** finding the closest chunks by cosine similarity in pgvector, with an HNSW index for speed at scale.
+- **Citations:** the model only cites source numbers, and the code maps them to the file and page, so a citation can't be made up.
+- **Evaluation:** a fixed set of test questions that measures retrieval (hit@k, MRR) and answers, so changes are judged by numbers instead of guesses.
