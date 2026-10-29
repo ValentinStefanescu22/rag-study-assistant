@@ -1,0 +1,17 @@
+services:
+  db:
+    # Official Postgres image with the pgvector extension pre-installed.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: rag
+    ports:
+      # 5433 on your Mac -> 5432 in the container (5432 is taken by a local Postgres).
+      - "5433:5432"
+    volumes:
+      # Named volume so your data survives `docker compose down`.
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
